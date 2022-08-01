@@ -12,7 +12,7 @@ Dropout: A Simple Way to Prevent Neural Networks from Overfitting
 https://www.cs.toronto.edu/~hinton/absps/JMLRdropout.pdf
 
 Convolution arithmetic tutorial
-http://deeplearning.net/software/theano_versions/dev/tutorial/conv_arithmetic.html
+https://theano-pymc.readthedocs.io/en/latest/tutorial/conv_arithmetic.html
 
 On the Practical Computational Power of Finite Precision RNNs for Language Recognition
 https://arxiv.org/abs/1805.04908
@@ -22,3 +22,9 @@ https://arxiv.org/abs/1703.03906
 
 Practical Deep Reinforcement Learning Approach for Stock Trading
 https://arxiv.org/abs/1811.07522
+
+Inceptionism: Going Deeper into Neural Networks
+https://ai.googleblog.com/2015/06/inceptionism-going-deeper-into-neural.html
+
+The Loss Surfaces of Multilayer Networks
+https://arxiv.org/pdf/1412.0233.pdf

@@ -16,9 +16,13 @@ import keras.backend as K
 import numpy as np
 import matplotlib.pyplot as plt
 
-if len(K.tensorflow_backend._get_available_gpus()) > 0:
-  from keras.layers import CuDNNLSTM as LSTM
-  from keras.layers import CuDNNGRU as GRU
+try:
+  import keras.backend as K
+  if len(K.tensorflow_backend._get_available_gpus()) > 0:
+    from keras.layers import CuDNNLSTM as LSTM
+    from keras.layers import CuDNNGRU as GRU
+except:
+  pass
 
 
 # make sure we do softmax over the time axis
@@ -34,10 +38,10 @@ def softmax_over_time(x):
 
 # config
 BATCH_SIZE = 64
-EPOCHS = 100
-LATENT_DIM = 256
-LATENT_DIM_DECODER = 256 # idea: make it different to ensure things all fit together properly!
-NUM_SAMPLES = 10000
+EPOCHS = 30
+LATENT_DIM = 400
+LATENT_DIM_DECODER = 400 # idea: make it different to ensure things all fit together properly!
+NUM_SAMPLES = 20000
 MAX_SEQUENCE_LENGTH = 100
 MAX_NUM_WORDS = 20000
 EMBEDDING_DIM = 100
@@ -65,7 +69,7 @@ for line in open('../large_files/translation/spa.txt'):
     continue
 
   # split up the input and translation
-  input_text, translation = line.rstrip().split('\t')
+  input_text, translation, *rest = line.rstrip().split('\t')
 
   # make the target input and output
   # recall we'll be using teacher forcing
@@ -190,7 +194,8 @@ decoder_targets_one_hot = np.zeros(
 # assign the values
 for i, d in enumerate(decoder_targets):
   for t, word in enumerate(d):
-    decoder_targets_one_hot[i, t, word] = 1
+    if word > 0:
+      decoder_targets_one_hot[i, t, word] = 1
 
 
 
@@ -324,17 +329,41 @@ model = Model(
   outputs=outputs
 )
 
+
+def custom_loss(y_true, y_pred):
+  # both are of shape N x T x K
+  mask = K.cast(y_true > 0, dtype='float32')
+  out = mask * y_true * K.log(y_pred)
+  return -K.sum(out) / K.sum(mask)
+
+
+def acc(y_true, y_pred):
+  # both are of shape N x T x K
+  targ = K.argmax(y_true, axis=-1)
+  pred = K.argmax(y_pred, axis=-1)
+  correct = K.cast(K.equal(targ, pred), dtype='float32')
+
+  # 0 is padding, don't include those
+  mask = K.cast(K.greater(targ, 0), dtype='float32')
+  n_correct = K.sum(mask * correct)
+  n_total = K.sum(mask)
+  return n_correct / n_total
+
+
 # compile the model
-model.compile(optimizer='rmsprop', loss='categorical_crossentropy', metrics=['accuracy'])
+model.compile(optimizer='adam', loss=custom_loss, metrics=[acc])
+# model.compile(optimizer='rmsprop', loss='categorical_crossentropy', metrics=['acc'])
 
 # train the model
-z = np.zeros((NUM_SAMPLES, LATENT_DIM_DECODER)) # initial [s, c]
+z = np.zeros((len(encoder_inputs), LATENT_DIM_DECODER)) # initial [s, c]
 r = model.fit(
   [encoder_inputs, decoder_inputs, z, z], decoder_targets_one_hot,
   batch_size=BATCH_SIZE,
   epochs=EPOCHS,
   validation_split=0.2
 )
+
+
 
 # plot some data
 plt.plot(r.history['loss'], label='loss')
@@ -343,8 +372,8 @@ plt.legend()
 plt.show()
 
 # accuracies
-plt.plot(r.history['acc'], label='acc')
-plt.plot(r.history['val_acc'], label='val_acc')
+plt.plot(r.history['accuracy'], label='acc')
+plt.plot(r.history['val_accuracy'], label='val_acc')
 plt.legend()
 plt.show()
 
@@ -370,6 +399,9 @@ context = one_step_attention(encoder_outputs_as_input, initial_s)
 
 # combine context with last word
 decoder_lstm_input = context_last_word_concat_layer([context, decoder_inputs_single_x])
+
+
+
 
 # lstm and final dense
 o, s, c = decoder_lstm(decoder_lstm_input, initial_state=[initial_s, initial_c])

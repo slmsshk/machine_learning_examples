@@ -15,18 +15,20 @@ from keras.utils import to_categorical
 import numpy as np
 import matplotlib.pyplot as plt
 
-import keras.backend as K
-if len(K.tensorflow_backend._get_available_gpus()) > 0:
-  from keras.layers import CuDNNLSTM as LSTM
-  from keras.layers import CuDNNGRU as GRU
+try:
+  import keras.backend as K
+  if len(K.tensorflow_backend._get_available_gpus()) > 0:
+    from keras.layers import CuDNNLSTM as LSTM
+    from keras.layers import CuDNNGRU as GRU
+except:
+  pass
 
 
 # some config
 BATCH_SIZE = 64  # Batch size for training.
-EPOCHS = 100  # Number of epochs to train for.
+EPOCHS = 40  # Number of epochs to train for.
 LATENT_DIM = 256  # Latent dimensionality of the encoding space.
 NUM_SAMPLES = 10000  # Number of samples to train on.
-MAX_SEQUENCE_LENGTH = 100
 MAX_NUM_WORDS = 20000
 EMBEDDING_DIM = 100
 
@@ -50,7 +52,7 @@ for line in open('../large_files/translation/spa.txt'):
     continue
 
   # split up the input and translation
-  input_text, translation = line.rstrip().split('\t')
+  input_text, translation, *rest = line.rstrip().split('\t')
 
   # make the target input and output
   # recall we'll be using teacher forcing
@@ -166,7 +168,8 @@ decoder_targets_one_hot = np.zeros(
 # assign the values
 for i, d in enumerate(decoder_targets):
   for t, word in enumerate(d):
-    decoder_targets_one_hot[i, t, word] = 1
+    if word != 0:
+      decoder_targets_one_hot[i, t, word] = 1
 
 
 
@@ -191,7 +194,7 @@ decoder_inputs_placeholder = Input(shape=(max_len_target,))
 
 # this word embedding will not use pre-trained vectors
 # although you could
-decoder_embedding = Embedding(num_words_output, LATENT_DIM)
+decoder_embedding = Embedding(num_words_output, EMBEDDING_DIM)
 decoder_inputs_x = decoder_embedding(decoder_inputs_placeholder)
 
 # since the decoder is a "to-many" model we want to have
@@ -219,12 +222,37 @@ decoder_outputs = decoder_dense(decoder_outputs)
 # Create the model object
 model = Model([encoder_inputs_placeholder, decoder_inputs_placeholder], decoder_outputs)
 
+
+def custom_loss(y_true, y_pred):
+  # both are of shape N x T x K
+  mask = K.cast(y_true > 0, dtype='float32')
+  out = mask * y_true * K.log(y_pred)
+  return -K.sum(out) / K.sum(mask)
+
+
+def acc(y_true, y_pred):
+  # both are of shape N x T x K
+  targ = K.argmax(y_true, axis=-1)
+  pred = K.argmax(y_pred, axis=-1)
+  correct = K.cast(K.equal(targ, pred), dtype='float32')
+
+  # 0 is padding, don't include those
+  mask = K.cast(K.greater(targ, 0), dtype='float32')
+  n_correct = K.sum(mask * correct)
+  n_total = K.sum(mask)
+  return n_correct / n_total
+
+model.compile(optimizer='adam', loss=custom_loss, metrics=[acc])
+
 # Compile the model and train it
-model.compile(
-  optimizer='rmsprop',
-  loss='categorical_crossentropy',
-  metrics=['accuracy']
-)
+# model.compile(
+#   optimizer='rmsprop',
+#   loss='categorical_crossentropy',
+#   metrics=['accuracy']
+# )
+
+
+
 r = model.fit(
   [encoder_inputs, decoder_inputs], decoder_targets_one_hot,
   batch_size=BATCH_SIZE,
@@ -239,8 +267,8 @@ plt.legend()
 plt.show()
 
 # accuracies
-plt.plot(r.history['acc'], label='acc')
-plt.plot(r.history['val_acc'], label='val_acc')
+plt.plot(r.history['accuracy'], label='acc')
+plt.plot(r.history['val_accuracy'], label='val_acc')
 plt.legend()
 plt.show()
 

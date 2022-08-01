@@ -20,13 +20,14 @@ from keras.optimizers import Adam
 from sklearn.metrics import roc_auc_score
 
 import keras.backend as K
-if len(K.tensorflow_backend._get_available_gpus()) > 0:
-  from keras.layers import CuDNNLSTM as LSTM
-  from keras.layers import CuDNNGRU as GRU
+# if len(K.tensorflow_backend._get_available_gpus()) > 0:
+#   from keras.layers import CuDNNLSTM as LSTM
+#   from keras.layers import CuDNNGRU as GRU
 
 
 # Download the data:
 # https://www.kaggle.com/c/jigsaw-toxic-comment-classification-challenge
+# https://lazyprogrammer.me/course_files/toxic_comment_train.csv
 # Download the word vectors:
 # http://nlp.stanford.edu/data/glove.6B.zip
 
@@ -115,8 +116,8 @@ print('Building model...')
 # create an LSTM network with a single LSTM
 input_ = Input(shape=(MAX_SEQUENCE_LENGTH,))
 x = embedding_layer(input_)
-# x = LSTM(15, return_sequences=True)(x)
-x = Bidirectional(LSTM(15, return_sequences=True))(x)
+x = LSTM(15, return_sequences=True)(x)
+# x = Bidirectional(LSTM(15, return_sequences=True))(x)
 x = GlobalMaxPool1D()(x)
 output = Dense(len(possible_labels), activation="sigmoid")(x)
 
@@ -124,7 +125,7 @@ model = Model(input_, output)
 model.compile(
   loss='binary_crossentropy',
   optimizer=Adam(lr=0.01),
-  metrics=['accuracy']
+  metrics=['accuracy'],
 )
 
 
@@ -144,8 +145,8 @@ plt.legend()
 plt.show()
 
 # accuracies
-plt.plot(r.history['acc'], label='acc')
-plt.plot(r.history['val_acc'], label='val_acc')
+plt.plot(r.history['accuracy'], label='acc')
+plt.plot(r.history['val_accuracy'], label='val_acc')
 plt.legend()
 plt.show()
 

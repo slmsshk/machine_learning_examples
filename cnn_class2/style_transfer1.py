@@ -24,21 +24,34 @@ import matplotlib.pyplot as plt
 from scipy.optimize import fmin_l_bfgs_b
 
 
+import tensorflow as tf
+if tf.__version__.startswith('2'):
+  tf.compat.v1.disable_eager_execution()
+
 
 def VGG16_AvgPool(shape):
   # we want to account for features across the entire image
   # so get rid of the maxpool which throws away information
   vgg = VGG16(input_shape=shape, weights='imagenet', include_top=False)
 
-  new_model = Sequential()
+  # new_model = Sequential()
+  # for layer in vgg.layers:
+  #   if layer.__class__ == MaxPooling2D:
+  #     # replace it with average pooling
+  #     new_model.add(AveragePooling2D())
+  #   else:
+  #     new_model.add(layer)
+
+  i = vgg.input
+  x = i
   for layer in vgg.layers:
     if layer.__class__ == MaxPooling2D:
       # replace it with average pooling
-      new_model.add(AveragePooling2D())
+      x = AveragePooling2D()(x)
     else:
-      new_model.add(layer)
+      x = layer(x)
 
-  return new_model
+  return Model(i, x)
 
 def VGG16_AvgPool_CutOff(shape, num_convs):
   # there are 13 convolutions in total
@@ -50,16 +63,25 @@ def VGG16_AvgPool_CutOff(shape, num_convs):
     return None
 
   model = VGG16_AvgPool(shape)
-  new_model = Sequential()
+  # new_model = Sequential()
+  # n = 0
+  # for layer in model.layers:
+  #   if layer.__class__ == Conv2D:
+  #     n += 1
+  #   new_model.add(layer)
+  #   if n >= num_convs:
+  #     break
+
   n = 0
+  output = None
   for layer in model.layers:
     if layer.__class__ == Conv2D:
       n += 1
-    new_model.add(layer)
     if n >= num_convs:
+      output = layer.output
       break
 
-  return new_model
+  return Model(model.input, output)
 
 
 def unpreprocess(img):
